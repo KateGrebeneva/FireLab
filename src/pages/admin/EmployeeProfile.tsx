@@ -5,7 +5,7 @@ import { useAsync } from '../../hooks/useAsync'
 import { useTitle } from '../../hooks/useTitle'
 import { useSettings } from '../../hooks/useSettings'
 import { getProfile, deleteEmployee, setEmployeeActive } from '../../services/employees'
-import { listAttempts } from '../../services/attempts'
+import { deleteAttempt, listAttempts } from '../../services/attempts'
 import { getCategoryStats } from '../../services/stats'
 import { humanError } from '../../lib/errors'
 import { Avatar } from '../../components/ui/Avatar'
@@ -20,9 +20,9 @@ import AreaChart from '../../components/charts/AreaChart'
 import HBarList from '../../components/charts/HBarList'
 import { useToast } from '../../components/ui/Toast'
 import { useConfirm } from '../../components/ui/Confirm'
-import { avg, fmtDate, fmtShortDay } from '../../utils/format'
+import { avg, fmtDate, fmtDateTime, fmtShortDay, typeLabel } from '../../utils/format'
 import { EmployeeModal } from './Employees'
-import type { AttemptType } from '../../types'
+import type { Attempt, AttemptType } from '../../types'
 
 export default function EmployeeProfile() {
   const { id = '' } = useParams()
@@ -55,6 +55,23 @@ export default function EmployeeProfile() {
     .sort((a, b) => b.value - a.value)
     .slice(0, 6)
   const needsTraining = lastExam ? !lastExam.passed : att.length > 0 && avg(att.map((a) => a.percentage ?? 0)) < settings.pass_percent
+
+  const removeAttempt = async (a: Attempt) => {
+    const ok = await confirm({
+      title: 'Удалить результат?',
+      text: `${typeLabel(a.type)} · ${a.percentage}% · ${fmtDateTime(a.completed_at)}. Удаление необратимо и попадёт в журнал действий.`,
+      confirmText: 'Удалить',
+      danger: true,
+    })
+    if (!ok) return
+    try {
+      await deleteAttempt(a.id)
+      toast.success('Результат удалён')
+      void reload()
+    } catch (e) {
+      toast.error(humanError(e))
+    }
+  }
 
   const toggle = async () => {
     if (p.is_active) {
@@ -185,7 +202,7 @@ export default function EmployeeProfile() {
           />
         </div>
         <div className="border-t border-line">
-          {shown.length ? <AttemptsTable rows={shown} base="/admin/results" pass={settings.pass_percent} /> : <Empty title="Попыток нет" />}
+          {shown.length ? <AttemptsTable rows={shown} base="/admin/results" pass={settings.pass_percent} onDelete={(a) => void removeAttempt(a)} /> : <Empty title="Попыток нет" />}
         </div>
       </div>
 

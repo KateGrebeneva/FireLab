@@ -36,7 +36,7 @@ const storeKey = (k: AttemptType) => `firelab.quiz.${k}`
 
 interface Saved {
   ticket: Ticket
-  answers: Record<string, number>
+  answers: Record<string, number[] | number>
   index: number
   startedAt: number
 }
@@ -72,7 +72,7 @@ export default function Quiz({ kind }: { kind: AttemptType }) {
   const confirm = useConfirm()
 
   const [ticket, setTicket] = useState<Ticket | null>(null)
-  const [answers, setAnswers] = useState<Record<string, number>>({})
+  const [answers, setAnswers] = useState<Record<string, number[]>>({})
   const [i, setI] = useState(0)
   const [dir, setDir] = useState<1 | -1>(1)
   const [starting, setStarting] = useState(false)
@@ -141,7 +141,8 @@ export default function Quiz({ kind }: { kind: AttemptType }) {
   const resume = () => {
     if (!saved) return
     startedAt.current = saved.startedAt
-    setAnswers(saved.answers)
+    // совместимость с ранее сохранённым форматом (один номер вместо массива)
+    setAnswers(Object.fromEntries(Object.entries(saved.answers).map(([k, v]) => [k, Array.isArray(v) ? v : [v]])))
     setI(Math.min(saved.index, saved.ticket.questions.length - 1))
     setNow(Date.now())
     setTicket(saved.ticket)
@@ -151,7 +152,7 @@ export default function Quiz({ kind }: { kind: AttemptType }) {
   const submit = useCallback(
     async (force = false) => {
       if (!ticket || submitting) return
-      const unanswered = ticket.questions.length - Object.keys(answers).length
+      const unanswered = ticket.questions.filter((x) => !answers[x.id]?.length).length
       if (!force && unanswered > 0) {
         const ok = await confirm({
           title: 'Завершить с пропусками?',
@@ -192,7 +193,7 @@ export default function Quiz({ kind }: { kind: AttemptType }) {
 
   const q = ticket?.questions[i]
   const total = ticket?.questions.length ?? 0
-  const answered = Object.keys(answers).length
+  const answered = ticket ? ticket.questions.filter((x) => answers[x.id]?.length).length : 0
 
   const go = useCallback(
     (n: number) => {
@@ -207,7 +208,12 @@ export default function Quiz({ kind }: { kind: AttemptType }) {
   const pick = useCallback(
     (optId: number) => {
       if (!q) return
-      setAnswers((a) => ({ ...a, [q.id]: optId }))
+      setAnswers((a) => {
+        if (!q.multi) return { ...a, [q.id]: [optId] }
+        const cur = a[q.id] ?? []
+        const next = cur.includes(optId) ? cur.filter((x) => x !== optId) : [...cur, optId].sort((x, y) => x - y)
+        return { ...a, [q.id]: next }
+      })
     },
     [q],
   )
@@ -246,12 +252,13 @@ export default function Quiz({ kind }: { kind: AttemptType }) {
             [Target, `Проходной балл — ${settings.pass_percent}%`],
             [Timer, settings.exam_minutes > 0 ? `Ограничение времени — ${settings.exam_minutes} мин` : 'Без ограничения по времени'],
             [ListChecks, 'Можно возвращаться к вопросам до завершения'],
+            [CheckCircle2, 'Где несколько правильных ответов — нужно выбрать все'],
           ]
         : [
             [Shuffle, `${settings.training_count} случайных вопросов, новый билет каждый раз`],
             [Clock, 'Без ограничения по времени'],
             [CheckCircle2, 'Результат и разбор ошибок сразу после завершения'],
-            [ListChecks, 'Пояснения к правильным ответам'],
+            [ListChecks, 'Пояснения; где несколько ответов — выберите все правильные'],
           ],
     [exam, settings],
   )
@@ -272,7 +279,7 @@ export default function Quiz({ kind }: { kind: AttemptType }) {
                 <div className={cn('text-[11px] font-bold uppercase tracking-[0.16em]', exam ? 'text-brand-200' : 'text-brand-600')}>{exam ? 'Аттестация' : 'Обучение'}</div>
                 <h1 className="mt-1 text-[28px] font-extrabold leading-tight sm:text-[32px]">{exam ? 'Экзамен' : 'Тренировка'}</h1>
                 <p className={cn('mt-2 max-w-lg text-[15px]', exam ? 'text-white/70' : 'text-ink-3')}>
-                  {exam ? 'Итоговая проверка знаний по пожарной безопасности. Результат сохраняется в истории аттестаций.' : 'Подготовьтесь к экзамену без давления. Каждый запуск — новый случайный билет.'}
+                  {exam ? 'Итоговая проверка знания требований охраны труда. Результат сохраняется в истории аттестаций.' : 'Подготовьтесь к экзамену без давления. Каждый запуск — новый случайный билет.'}
                 </p>
               </div>
             </div>
@@ -292,7 +299,7 @@ export default function Quiz({ kind }: { kind: AttemptType }) {
             </ul>
 
             <div className="flex items-center gap-2 text-[12.5px] text-ink-4">
-              <Keyboard size={15} /> Подсказка: клавиши 1–4 выбирают ответ, ← → переключают вопросы
+              <Keyboard size={15} /> Подсказка: клавиши 1–4 выбирают ответ, ← → переключают вопросы. В вопросах с несколькими ответами отметьте все правильные.
             </div>
 
             {avail.loading ? (
@@ -367,14 +374,19 @@ export default function Quiz({ kind }: { kind: AttemptType }) {
           <div key={q.id} className={cn(dir === 1 ? 'animate-slide-in' : 'animate-fade-in')}>
             {q.category && <div className="eyebrow mb-3">{q.category}</div>}
             <h2 className="font-sans text-[18px] font-bold leading-snug text-ink sm:text-[21px]">{q.text}</h2>
-            <div className="mt-6 space-y-2.5" role="radiogroup" aria-label="Варианты ответа">
+            {q.multi && (
+              <div className="mt-3 inline-flex items-center gap-2 rounded-full bg-amber-50 px-3 py-1 text-[12.5px] font-semibold text-amber-800 ring-1 ring-amber-200">
+                <ListChecks size={14} /> Несколько правильных ответов — выберите все
+              </div>
+            )}
+            <div className="mt-6 space-y-2.5" role={q.multi ? 'group' : 'radiogroup'} aria-label="Варианты ответа">
               {q.options.map((o, n) => {
-                const active = answers[q.id] === o.id
+                const active = (answers[q.id] ?? []).includes(o.id)
                 return (
                   <button
                     key={o.id}
                     type="button"
-                    role="radio"
+                    role={q.multi ? 'checkbox' : 'radio'}
                     aria-checked={active}
                     onClick={() => pick(o.id)}
                     className={cn(
@@ -386,7 +398,8 @@ export default function Quiz({ kind }: { kind: AttemptType }) {
                   >
                     <span
                       className={cn(
-                        'grid h-7 w-7 shrink-0 place-items-center rounded-lg text-[12.5px] font-bold transition-colors',
+                        'grid h-7 w-7 shrink-0 place-items-center text-[12.5px] font-bold transition-colors',
+                        q.multi ? 'rounded-md' : 'rounded-lg',
                         active ? 'bg-brand-600 text-white' : 'bg-gray-100 text-ink-3 group-hover:bg-brand-100 group-hover:text-brand-700',
                       )}
                     >
@@ -433,7 +446,7 @@ export default function Quiz({ kind }: { kind: AttemptType }) {
                 aria-label={`Вопрос ${n + 1}`}
                 className={cn(
                   'aspect-square rounded-lg text-[12.5px] font-semibold transition-all duration-150',
-                  n === i ? 'bg-ink text-white shadow ring-2 ring-ink ring-offset-2' : answers[x.id] !== undefined ? 'bg-brand-600 text-white hover:bg-brand-700' : 'bg-gray-100 text-ink-3 hover:bg-gray-200',
+                  n === i ? 'bg-ink text-white shadow ring-2 ring-ink ring-offset-2' : answers[x.id]?.length ? 'bg-brand-600 text-white hover:bg-brand-700' : 'bg-gray-100 text-ink-3 hover:bg-gray-200',
                 )}
               >
                 {n + 1}

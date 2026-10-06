@@ -42,12 +42,16 @@ export interface AttemptQuestion {
   explanation: string | null
   options: Opt[]
   selected: number | null
+  /** выбранные варианты (для вопросов с несколькими правильными ответами) */
+  selected_ids: number[] | null
 }
 
 export interface TicketQuestion {
   id: string
   category: string | null
   text: string
+  /** несколько правильных ответов */
+  multi?: boolean
   options: { id: number; text: string }[]
 }
 
@@ -132,3 +136,11 @@ export interface EmployeeStat {
 }
 
 export type EmployeeWithStats = Profile & { stats: EmployeeStat | null }
+
+export interface AuditRow {
+  id: number
+  at: string
+  actor_name: string | null
+  action: string
+  details: string | null
+}

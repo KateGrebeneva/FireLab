@@ -7,7 +7,7 @@ export async function startAttempt(type: AttemptType): Promise<Ticket> {
   return data as Ticket
 }
 
-export async function finishAttempt(attemptId: string, answers: Record<string, number>): Promise<{ late: boolean }> {
+export async function finishAttempt(attemptId: string, answers: Record<string, number[]>): Promise<{ late: boolean }> {
   const { data, error } = await supabase.rpc('finish_attempt', { p_attempt: attemptId, p_answers: answers })
   if (error) throw error
   const r = (data ?? {}) as { late?: boolean }
@@ -53,7 +53,7 @@ export async function getAttempt(id: string): Promise<{ attempt: Attempt; questi
       .single(),
     supabase
       .from('attempt_questions')
-      .select('id,position,question_text,category,explanation,options,selected')
+      .select('id,position,question_text,category,explanation,options,selected,selected_ids')
       .eq('attempt_id', id)
       .order('position'),
   ])
@@ -63,7 +63,12 @@ export async function getAttempt(id: string): Promise<{ attempt: Attempt; questi
   return { attempt: a.data as unknown as Attempt, questions: (q.data ?? []) as AttemptQuestion[] }
 }
 
-export async function deleteAttempt(id: string): Promise<void> {
-  const { error } = await supabase.from('attempts').delete().eq('id', id)
+/** Удаление результатов (только администратор — проверяется в базе) */
+export async function deleteAttempts(ids: string[]): Promise<number> {
+  if (!ids.length) return 0
+  const { data, error } = await supabase.rpc('delete_attempts', { p_ids: ids })
   if (error) throw error
+  return Number(data ?? 0)
 }
+
+export const deleteAttempt = (id: string) => deleteAttempts([id])

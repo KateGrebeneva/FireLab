@@ -103,7 +103,7 @@ export default function Login() {
         <div className="pointer-events-none absolute -bottom-40 -left-20 h-[420px] w-[420px] rounded-full bg-black/25 blur-3xl" />
         <div className="relative flex h-full flex-col justify-center p-16 text-white">
           <div className="max-w-md">
-            <div className="text-[12px] font-bold uppercase tracking-[0.16em] text-white/60">Пожарная безопасность</div>
+            <div className="text-[12px] font-bold uppercase tracking-[0.16em] text-white/60">Пожарная охрана</div>
             <h2 className="mt-4 text-[40px] font-extrabold leading-[1.05]">Знания, которые спасают жизни</h2>
             <p className="mt-4 text-[16px] leading-relaxed text-white/75">Регулярная тренировка и честная аттестация — с мгновенной проверкой и разбором каждой ошибки.</p>
           </div>

@@ -1,14 +1,17 @@
 import { useMemo, useState, type ReactNode } from 'react'
-import { Link, useLocation, useParams } from 'react-router-dom'
-import { ArrowLeft, BookOpen, Check, CheckCircle2, ClipboardCheck, Clock, Lightbulb, PartyPopper, RotateCcw, X, XCircle } from 'lucide-react'
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
+import { ArrowLeft, BookOpen, Check, ListChecks, Trash2, CheckCircle2, ClipboardCheck, Clock, Lightbulb, PartyPopper, RotateCcw, X, XCircle } from 'lucide-react'
 import { useAsync } from '../../hooks/useAsync'
 import { useTitle } from '../../hooks/useTitle'
 import { useSettings } from '../../hooks/useSettings'
 import { useAuth } from '../../lib/auth'
-import { getAttempt } from '../../services/attempts'
+import { deleteAttempt, getAttempt } from '../../services/attempts'
+import { useConfirm } from '../../components/ui/Confirm'
+import { useToast } from '../../components/ui/Toast'
+import { humanError } from '../../lib/errors'
 import Ring from '../../components/charts/Ring'
 import Segmented from '../../components/ui/Segmented'
-import { ButtonLink } from '../../components/ui/Button'
+import { Button, ButtonLink } from '../../components/ui/Button'
 import { PageLoader } from '../../components/ui/Loader'
 import Empty, { ErrorBox } from '../../components/ui/Empty'
 import { ResultBadge } from '../../components/AttemptsTable'
@@ -18,7 +21,12 @@ import { fmtDateTime, fmtDuration, typeLabel } from '../../utils/format'
 import type { AttemptQuestion } from '../../types'
 
 const LETTERS = 'ABCDEFGHIJ'
-const isRight = (q: AttemptQuestion) => q.selected !== null && q.options.find((o) => o.is_correct)?.id === q.selected
+const chosenIds = (q: AttemptQuestion) => q.selected_ids ?? (q.selected !== null ? [q.selected] : [])
+const isRight = (q: AttemptQuestion) => {
+  const chosen = chosenIds(q)
+  const right = q.options.filter((o) => o.is_correct).map((o) => o.id)
+  return chosen.length > 0 && chosen.length === right.length && right.every((id) => chosen.includes(id))
+}
 
 export default function AttemptReview() {
   const { id = '' } = useParams()
@@ -29,6 +37,10 @@ export default function AttemptReview() {
   const admin = profile?.role === 'admin'
   const [filter, setFilter] = useState<'all' | 'wrong' | 'right'>(fresh ? 'wrong' : 'all')
   const { data, loading, error, reload } = useAsync(() => getAttempt(id), [id])
+  const nav = useNavigate()
+  const confirm = useConfirm()
+  const toast = useToast()
+  const [deleting, setDeleting] = useState(false)
   useTitle('Разбор попытки')
 
   const qs = useMemo(() => data?.questions ?? [], [data])
@@ -45,11 +57,42 @@ export default function AttemptReview() {
   const back = admin ? '/admin/results' : '/employee/history'
   const showExpl = admin || settings.show_explanations
 
+  const remove = async () => {
+    const ok = await confirm({
+      title: 'Удалить результат?',
+      text: (
+        <>
+          {typeLabel(a.type)} от {fmtDateTime(a.completed_at)}
+          {a.profiles?.full_name ? ` (${a.profiles.full_name})` : ''} будет удалён без возможности восстановления. Действие попадёт в журнал.
+        </>
+      ),
+      confirmText: 'Удалить',
+      danger: true,
+    })
+    if (!ok) return
+    setDeleting(true)
+    try {
+      await deleteAttempt(a.id)
+      toast.success('Результат удалён')
+      nav(back, { replace: true })
+    } catch (e) {
+      toast.error(humanError(e))
+      setDeleting(false)
+    }
+  }
+
   return (
     <div className="mx-auto max-w-4xl space-y-5">
-      <Link to={back} className="inline-flex items-center gap-1.5 text-[13px] font-medium text-ink-3 transition hover:text-brand-700">
-        <ArrowLeft size={15} /> {admin ? 'Все результаты' : 'Мои результаты'}
-      </Link>
+      <div className="flex items-center justify-between gap-3">
+        <Link to={back} className="inline-flex items-center gap-1.5 text-[13px] font-medium text-ink-3 transition hover:text-brand-700">
+          <ArrowLeft size={15} /> {admin ? 'Все результаты' : 'Мои результаты'}
+        </Link>
+        {admin && (
+          <Button variant="danger" size="sm" icon={<Trash2 size={15} />} loading={deleting} onClick={() => void remove()}>
+            Удалить результат
+          </Button>
+        )}
+      </div>
 
       {/* summary */}
       <div className="card overflow-hidden">
@@ -147,14 +190,19 @@ export default function AttemptReview() {
                     <div className="min-w-0 flex-1">
                       {q.category && <div className="mb-1 text-[11.5px] font-semibold uppercase tracking-wider text-ink-4">{q.category}</div>}
                       <h3 className="font-sans text-[15.5px] font-semibold leading-snug text-ink">{q.question_text}</h3>
+                      {q.options.filter((o) => o.is_correct).length > 1 && (
+                        <div className="mt-1.5 inline-flex items-center gap-1.5 text-[12px] font-semibold text-amber-700">
+                          <ListChecks size={13} /> несколько правильных ответов
+                        </div>
+                      )}
                     </div>
                     <span className={cn('hidden shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-[12px] font-semibold sm:inline-flex', ok ? 'bg-emerald-50 text-emerald-700' : 'bg-brand-50 text-brand-700')}>
-                      {ok ? <Check size={13} /> : <X size={13} />} {ok ? 'Верно' : q.selected === null ? 'Нет ответа' : 'Ошибка'}
+                      {ok ? <Check size={13} /> : <X size={13} />} {ok ? 'Верно' : chosenIds(q).length === 0 ? 'Нет ответа' : 'Ошибка'}
                     </span>
                   </div>
                   <ul className="mt-4 space-y-2 sm:pl-11">
                     {q.options.map((o, k) => {
-                      const chosen = o.id === q.selected
+                      const chosen = chosenIds(q).includes(o.id)
                       return (
                         <li
                           key={o.id}

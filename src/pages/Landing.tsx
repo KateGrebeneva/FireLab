@@ -28,7 +28,7 @@ import {
 import Logo from '../components/Logo'
 import { ButtonLink } from '../components/ui/Button'
 import AppMockup from '../components/landing/AppMockup'
-import { AlarmButton, ExitSign, Extinguisher, FireTruck, FirstAidKit, Flame, Helmet, Hydrant } from '../components/landing/Illustrations'
+import { AlarmButton, Extinguisher, FireTruck, FirstAidKit, Helmet, Hydrant } from '../components/landing/Illustrations'
 import AreaChart from '../components/charts/AreaChart'
 import HBarList from '../components/charts/HBarList'
 import Ring from '../components/charts/Ring'
@@ -141,12 +141,10 @@ const STRIP = [
 ]
 
 const TOPICS = [
-  { title: 'Первичные средства пожаротушения', text: 'Огнетушители, внутренние краны, правила применения.', art: <Extinguisher className="w-10" /> },
-  { title: 'Действия при пожаре', text: 'Оповещение, вызов пожарной охраны, первые действия.', art: <Flame className="w-12" /> },
-  { title: 'Эвакуация', text: 'Пути эвакуации, планы, порядок вывода людей.', art: <ExitSign className="w-[72px]" /> },
-  { title: 'Пожарная профилактика', text: 'Системы оповещения, извещатели, противопожарный режим.', art: <AlarmButton className="w-14" /> },
-  { title: 'Пожарная безопасность', text: 'Общие требования, ответственность, инструктажи.', art: <Helmet className="w-[72px]" /> },
-  { title: 'Первая помощь и охрана труда', text: 'Оказание первой помощи пострадавшим, безопасные методы работ.', art: <FirstAidKit className="w-16" /> },
+  { title: 'Основы охраны труда в Российской Федерации', text: 'Трудовое законодательство, права и обязанности работника и работодателя, режим труда.', art: <Helmet className="w-[72px]" /> },
+  { title: 'Общие вопросы охраны труда и СУОТ', text: 'Система управления охраной труда, расследование несчастных случаев, инструктажи и обучение.', art: <AlarmButton className="w-14" /> },
+  { title: 'Работы повышенной опасности', text: 'Безопасные методы и приёмы работ, СИЗ, работа с пожарной техникой и оборудованием.', art: <Extinguisher className="w-10" /> },
+  { title: 'Оказание первой помощи пострадавшим', text: 'Порядок действий, кровотечения, ожоги, переломы, реанимация, психологическая поддержка.', art: <FirstAidKit className="w-16" /> },
 ]
 
 const demoDays = [62, 68, 66, 71, 74, 72, 78, 81, 79, 84, 86, 88]
@@ -179,10 +177,10 @@ export default function Landing() {
               Fire<span className="text-grad">Lab</span>
             </h1>
             <p className="mt-5 max-w-xl animate-fade-up text-[22px] font-bold leading-snug text-ink-2 [animation-delay:140ms] sm:text-[26px]">
-              Подготовка к аттестации <span className="text-brand-700">по пожарной безопасности</span>
+              Подготовка к аттестации <span className="text-brand-700">по пожарной охране</span>
             </p>
             <p className="mt-4 max-w-lg animate-fade-up text-[16px] leading-relaxed text-ink-3 [animation-delay:200ms] sm:text-[17px]">
-              Цифровая система обучения, проверки знаний и итоговой аттестации сотрудников. Случайные билеты, мгновенная проверка и прозрачная аналитика для руководителя.
+              Цифровая система обучения, проверки знания требований охраны труда и итоговой аттестации сотрудников пожарной охраны. Случайные билеты, мгновенная проверка и прозрачная аналитика для руководителя.
             </p>
             <div className="mt-8 flex animate-fade-up flex-col gap-3 [animation-delay:260ms] sm:flex-row">
               <ButtonLink to="/login" size="lg" iconRight={<ArrowRight size={18} />}>
@@ -245,8 +243,8 @@ export default function Landing() {
       <section id="topics" className="relative scroll-mt-20 overflow-hidden py-20 sm:py-24">
         <div className="pointer-events-none absolute -left-32 top-10 h-80 w-80 rounded-full bg-brand-50 blur-3xl" />
         <div className="container relative">
-          <SectionTitle eyebrow="Темы подготовки" title="Что проверяет система" text="Вопросы сгруппированы по темам — руководитель видит, где у команды пробелы." className="max-w-2xl" />
-          <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <SectionTitle eyebrow="Темы подготовки" title="Что проверяет система" text="Вопросы взяты из тестов по проверке знания требований охраны труда и сгруппированы по темам — руководитель видит, где у команды пробелы." className="max-w-2xl" />
+          <div className="mt-12 grid gap-4 md:grid-cols-2">
             {TOPICS.map((t, i) => (
               <div key={t.title} className="reveal card card-hover group flex items-center gap-5 p-5" style={{ ['--d' as string]: `${i * 70}ms` }}>
                 <div className="grid h-24 w-24 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-[#FBF3F4] to-[#F6E9EB] ring-1 ring-brand-100/70 transition duration-300 group-hover:scale-105">
@@ -396,11 +394,11 @@ export default function Landing() {
               <HBarList
                 max={30}
                 items={[
-                  { label: 'Пожарная безопасность', value: 28 },
-                  { label: 'Средства пожаротушения', value: 18 },
-                  { label: 'Эвакуация людей', value: 16 },
-                  { label: 'Нормативные документы', value: 12 },
-                  { label: 'Действия при пожаре', value: 10 },
+                  { label: 'Работы повышенной опасности', value: 28 },
+                  { label: 'Первая помощь пострадавшим', value: 18 },
+                  { label: 'Расследование несчастных случаев', value: 16 },
+                  { label: 'Основы охраны труда', value: 12 },
+                  { label: 'Средства индивидуальной защиты', value: 10 },
                 ]}
               />
             </div>
@@ -478,7 +476,7 @@ export default function Landing() {
           <div className="relative grid items-center gap-10 lg:grid-cols-[1fr_auto]">
             <div>
               <h2 className="text-[30px] font-extrabold leading-tight sm:text-[40px]">Готовы начать подготовку?</h2>
-              <p className="mt-3 max-w-xl text-[16px] text-white/80">Современные инструменты для обучения и аттестации сотрудников по пожарной безопасности.</p>
+              <p className="mt-3 max-w-xl text-[16px] text-white/80">Современные инструменты для обучения и аттестации сотрудников пожарной охраны.</p>
               <ButtonLink to="/login" variant="white" size="lg" iconRight={<ArrowRight size={18} />} className="mt-8">
                 Войти в систему
               </ButtonLink>
@@ -495,7 +493,7 @@ export default function Landing() {
       <footer className="border-t border-line/70 bg-white">
         <div className="container flex flex-col items-start justify-between gap-4 py-8 text-[13px] text-ink-3 sm:flex-row sm:items-center">
           <Logo />
-          <span>Тестирование и аттестация сотрудников по пожарной безопасности</span>
+          <span>Тестирование и аттестация сотрудников пожарной охраны</span>
           <span>© {year} FireLab</span>
         </div>
       </footer>

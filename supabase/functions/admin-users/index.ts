@@ -1,5 +1,6 @@
 // Edge Function «admin-users» — операции, которым нужен service role:
-// создание, изменение (в т.ч. пароля), блокировка/разблокировка и удаление сотрудников.
+// вход по логину (без раскрытия email), создание, изменение (в т.ч. пароля),
+// блокировка/разблокировка и удаление сотрудников. Все действия админа пишутся в журнал.
 // Ключ service role живёт только в окружении Supabase и никогда не попадает во frontend.
 import { createClient } from 'npm:@supabase/supabase-js@2'
 
@@ -28,23 +29,51 @@ Deno.serve(async (req) => {
 
   const admin = createClient(url, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } })
 
-  // Проверяем JWT вызывающего вручную (работает и со старыми, и с новыми ключами подписи)
-  const token = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '')
-  if (!token) return json({ error: 'Не авторизован' }, 401)
-  const { data: u, error: authErr } = await admin.auth.getUser(token)
-  if (authErr || !u.user) return json({ error: 'Сессия недействительна' }, 401)
-
-  const { data: me } = await admin.from('profiles').select('role,is_active').eq('id', u.user.id).single()
-  if (me?.role !== 'admin' || !me.is_active) return json({ error: 'Нет доступа' }, 403)
-
   let b: Record<string, unknown>
   try {
     b = await req.json()
   } catch {
     return json({ error: 'Некорректный запрос' }, 400)
   }
-
   const action = clean(b.action, 20)
+
+  // ---- Вход по логину: email ищется на сервере и не раскрывается посетителю ----
+  if (action === 'login') {
+    const login = clean(b.login, 120)
+    const password = typeof b.password === 'string' ? b.password : ''
+    const fail = (msg = 'Неверный логин или пароль') => json({ error: msg }, 401)
+    if (!login || !password || password.length > 72) return fail()
+    let email = login
+    if (!login.includes('@')) {
+      if (!USERNAME.test(login)) return fail()
+      const { data: p } = await admin.from('profiles').select('id').ilike('username', likeExact(login)).maybeSingle()
+      if (!p) return fail()
+      const { data: au } = await admin.auth.admin.getUserById(p.id)
+      email = au.user?.email ?? ''
+      if (!email) return fail()
+    }
+    const authClient = createClient(url, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } })
+    const { data, error } = await authClient.auth.signInWithPassword({ email, password })
+    if (error || !data.session) return fail(/banned/i.test(error?.message ?? '') ? 'Учётная запись заблокирована администратором' : undefined)
+    return json({ access_token: data.session.access_token, refresh_token: data.session.refresh_token })
+  }
+
+  // Проверяем JWT вызывающего вручную (работает и со старыми, и с новыми ключами подписи)
+  const token = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '')
+  if (!token) return json({ error: 'Не авторизован' }, 401)
+  const { data: u, error: authErr } = await admin.auth.getUser(token)
+  if (authErr || !u.user) return json({ error: 'Сессия недействительна' }, 401)
+
+  const { data: me } = await admin.from('profiles').select('role,is_active,full_name').eq('id', u.user.id).single()
+  if (me?.role !== 'admin' || !me.is_active) return json({ error: 'Нет доступа' }, 403)
+
+  // журнал действий (таблица audit_log из миграции 006; если её нет — молча пропускаем)
+  const actorId = u.user.id
+  const actorName = String(me.full_name ?? '')
+  const audit = async (act: string, details: string) => {
+    await admin.from('audit_log').insert({ actor: actorId, actor_name: actorName, action: act, details: details.slice(0, 500) })
+  }
+
   const id = clean(b.id, 64)
 
   if (action === 'create') {
@@ -74,11 +103,12 @@ Deno.serve(async (req) => {
       await admin.auth.admin.deleteUser(data.user.id)
       return json({ error: e2.message }, 400)
     }
+    await audit('Добавлен сотрудник', `${full_name} (@${username})`)
     return json({ ok: true, id: data.user.id })
   }
 
   if (!id) return json({ error: 'Не указан сотрудник' }, 400)
-  const { data: target } = await admin.from('profiles').select('id,role').eq('id', id).maybeSingle()
+  const { data: target } = await admin.from('profiles').select('id,role,full_name,username').eq('id', id).maybeSingle()
   if (!target) return json({ error: 'Сотрудник не найден' }, 404)
   if (target.role === 'admin' && action !== 'update') return json({ error: 'Действие недоступно для администратора' }, 400)
 
@@ -107,6 +137,7 @@ Deno.serve(async (req) => {
       const { error } = await admin.auth.admin.updateUserById(id, { password: b.password })
       if (error) return json({ error: error.message }, 400)
     }
+    await audit('Изменён сотрудник', `${patch.full_name ?? target.full_name} (@${patch.username ?? target.username})${typeof b.password === 'string' && b.password ? ' · новый пароль' : ''}`)
     return json({ ok: true })
   }
 
@@ -116,13 +147,16 @@ Deno.serve(async (req) => {
     if (error) return json({ error: error.message }, 400)
     // бан в Auth обрывает возможность обновлять сессию — заблокированный не сможет работать дальше
     await admin.auth.admin.updateUserById(id, { ban_duration: active ? 'none' : BAN_FOREVER })
+    await audit(active ? 'Разблокирован сотрудник' : 'Заблокирован сотрудник', `${target.full_name} (@${target.username})`)
     return json({ ok: true })
   }
 
   if (action === 'delete') {
-    if (id === u.user.id) return json({ error: 'Нельзя удалить себя' }, 400)
+    if (id === actorId) return json({ error: 'Нельзя удалить себя' }, 400)
     const { error } = await admin.auth.admin.deleteUser(id)
-    return error ? json({ error: error.message }, 400) : json({ ok: true })
+    if (error) return json({ error: error.message }, 400)
+    await audit('Удалён сотрудник', `${target.full_name} (@${target.username})`)
+    return json({ ok: true })
   }
 
   return json({ error: 'Неизвестное действие' }, 400)

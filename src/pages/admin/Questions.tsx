@@ -49,7 +49,7 @@ export default function Questions() {
 
   useEffect(() => setLimit(STEP), [q, cat])
 
-  const broken = list.filter((x) => x.answers.filter((a) => a.is_correct).length !== 1 || x.answers.length < 2).length
+  const broken = list.filter((x) => x.answers.filter((a) => a.is_correct).length < 1 || x.answers.length < 2).length
 
   const remove = async (x: Question) => {
     const ok = await confirm({
@@ -95,7 +95,7 @@ export default function Questions() {
       {broken > 0 && (
         <div className="mb-4 flex gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-[14px] text-amber-900">
           <AlertTriangle size={19} className="shrink-0 text-amber-600" />
-          {broken} вопрос(ов) без единственного правильного ответа — они не попадают в билеты. Отредактируйте их.
+          {broken} вопрос(ов) без правильного ответа или с одним вариантом — они не попадают в билеты. Отредактируйте их.
         </div>
       )}
 
@@ -138,7 +138,8 @@ export default function Questions() {
         <div className="space-y-2.5">
           {filtered.slice(0, limit).map((x) => {
             const open = openId === x.id
-            const ok = x.answers.filter((a) => a.is_correct).length === 1
+            const nRight = x.answers.filter((a) => a.is_correct).length
+            const ok = nRight >= 1 && x.answers.length >= 2
             return (
               <div key={x.id} className={cn('card overflow-hidden transition-shadow duration-200', open && 'shadow-lift')}>
                 <div className="p-4 sm:p-5">
@@ -148,6 +149,7 @@ export default function Questions() {
                         {x.category}
                       </span>
                       <span className="text-[12px] text-ink-4">{x.answers.length} вар.</span>
+                      {nRight > 1 && <Badge tone="blue">{nRight} правильных</Badge>}
                       {!ok && <Badge tone="amber">нет правильного ответа</Badge>}
                     </div>
                     <div className="-mr-2 -mt-0.5 flex shrink-0 items-center">
@@ -225,12 +227,12 @@ interface Form {
   text: string
   explanation: string
   options: string[]
-  correct: number
+  correct: number[]
 }
 
 function QuestionModal({ open, question, categories, onClose, onSaved }: { open: boolean; question: Question | null; categories: string[]; onClose: () => void; onSaved: () => void }) {
   const toast = useToast()
-  const [f, setF] = useState<Form>({ category: '', text: '', explanation: '', options: ['', '', '', ''], correct: 0 })
+  const [f, setF] = useState<Form>({ category: '', text: '', explanation: '', options: ['', '', '', ''], correct: [0] })
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
 
@@ -245,10 +247,10 @@ function QuestionModal({ open, question, categories, onClose, onSaved }: { open:
         text: question.question_text,
         explanation: question.explanation ?? '',
         options: opts,
-        correct: Math.max(0, question.answers.findIndex((a) => a.is_correct)),
+        correct: question.answers.map((a, k) => (a.is_correct ? k : -1)).filter((k) => k >= 0),
       })
     } else {
-      setF({ category: categories[0] ?? '', text: '', explanation: '', options: ['', '', '', ''], correct: 0 })
+      setF({ category: categories[0] ?? '', text: '', explanation: '', options: ['', '', '', ''], correct: [0] })
     }
   }, [open, question, categories])
 
@@ -256,7 +258,7 @@ function QuestionModal({ open, question, categories, onClose, onSaved }: { open:
   const removeOpt = (n: number) => {
     if (f.options.length <= 2) return
     const options = f.options.filter((_, k) => k !== n)
-    const correct = n === f.correct ? 0 : n < f.correct ? f.correct - 1 : f.correct
+    const correct = f.correct.filter((k) => k !== n).map((k) => (k > n ? k - 1 : k))
     setF({ ...f, options, correct })
   }
 
@@ -266,7 +268,7 @@ function QuestionModal({ open, question, categories, onClose, onSaved }: { open:
     if (!f.category.trim()) return setErr('Выберите категорию')
     if (f.text.trim().length < 5) return setErr('Введите текст вопроса')
     if (filled.length < 2) return setErr('Нужно минимум два варианта ответа')
-    if (!f.options[f.correct]?.trim()) return setErr('Отметьте правильный ответ среди заполненных вариантов')
+    if (!filled.some((x) => f.correct.includes(x.k))) return setErr('Отметьте хотя бы один правильный ответ среди заполненных вариантов')
     if (new Set(filled.map((x) => x.t.toLowerCase())).size !== filled.length) return setErr('Варианты ответа не должны повторяться')
     setErr('')
     setBusy(true)
@@ -276,7 +278,7 @@ function QuestionModal({ open, question, categories, onClose, onSaved }: { open:
         category: f.category,
         question_text: f.text,
         explanation: f.explanation,
-        answers: filled.map((x) => ({ text: x.t, is_correct: x.k === f.correct })),
+        answers: filled.map((x) => ({ text: x.t, is_correct: f.correct.includes(x.k) })),
       })
       toast.success(question ? 'Вопрос сохранён' : 'Вопрос добавлен')
       onSaved()
@@ -293,7 +295,7 @@ function QuestionModal({ open, question, categories, onClose, onSaved }: { open:
       onClose={onClose}
       size="lg"
       title={question ? 'Редактирование вопроса' : 'Новый вопрос'}
-      description="Отметьте один правильный вариант. Изменения не затронут уже пройденные попытки."
+      description="Отметьте правильные варианты — один или несколько. Изменения не затронут уже пройденные попытки."
       footer={
         <>
           <Button variant="secondary" onClick={onClose}>
@@ -319,12 +321,12 @@ function QuestionModal({ open, question, categories, onClose, onSaved }: { open:
           <div className="label">Варианты ответа</div>
           <div className="space-y-2">
             {f.options.map((o, n) => {
-              const right = f.correct === n
+              const right = f.correct.includes(n)
               return (
                 <div key={n} className={cn('flex items-center gap-2 rounded-2xl border p-1.5 pl-2 transition', right ? 'border-emerald-300 bg-emerald-50/60' : 'border-line bg-white')}>
                   <button
                     type="button"
-                    onClick={() => setF({ ...f, correct: n })}
+                    onClick={() => setF({ ...f, correct: right ? f.correct.filter((k) => k !== n) : [...f.correct, n].sort((x, y) => x - y) })}
                     className={cn(
                       'grid h-9 w-9 shrink-0 place-items-center rounded-xl text-[13px] font-bold transition',
                       right ? 'bg-emerald-600 text-white shadow' : 'bg-gray-100 text-ink-3 hover:bg-emerald-100 hover:text-emerald-700',
@@ -358,7 +360,7 @@ function QuestionModal({ open, question, categories, onClose, onSaved }: { open:
             ) : (
               <span />
             )}
-            <span className="text-[12px] text-ink-4">Нажмите на букву, чтобы отметить правильный ответ</span>
+            <span className="text-[12px] text-ink-4">Нажмите на букву, чтобы отметить правильный ответ (можно несколько)</span>
           </div>
         </div>
 

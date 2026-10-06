@@ -3,16 +3,11 @@ import { ArrowLeft, ArrowRight, BarChart3, BookOpen, CheckCircle2, ClipboardChec
 import { LogoMark } from '../Logo'
 import { cn } from '../../lib/cn'
 
-const options = [
-  'Немедленно сообщить в пожарную охрану',
-  'Продолжить работу и наблюдать',
-  'Покинуть помещение, никому не сообщая',
-  'Самостоятельно приступить к тушению',
-]
+const options = ['Разрешается', 'Не разрешается', 'Разрешается, при условии его закрепления']
 
 /** Интерактивный макет интерфейса для hero-блока */
 export default function AppMockup() {
-  const [sel, setSel] = useState(0)
+  const [sel, setSel] = useState(1)
   return (
     <div className="relative mx-auto w-full max-w-[600px]">
       {/* glow */}
@@ -74,7 +69,7 @@ export default function AppMockup() {
             <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-gray-100">
               <div className="h-full w-[47%] origin-left animate-growx rounded-full bg-gradient-to-r from-brand-500 to-brand-700" />
             </div>
-            <div className="mt-4 text-[13.5px] font-bold leading-snug text-ink">Какие действия необходимо выполнить при обнаружении признаков пожара?</div>
+            <div className="mt-4 text-[13.5px] font-bold leading-snug text-ink">Разрешается ли оставлять пожарный ствол без надзора?</div>
             <div className="mt-3 space-y-1.5">
               {options.map((o, i) => (
                 <button

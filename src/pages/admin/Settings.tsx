@@ -1,10 +1,12 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
-import { AlertTriangle, BookOpen, Building2, Check, ChevronUp, ClipboardCheck, Pencil, Plus, Save, Tags, Timer, Trash2, X } from 'lucide-react'
+import { AlertTriangle, BookOpen, History, Building2, Check, ChevronUp, ClipboardCheck, Pencil, Plus, Save, Tags, Timer, Trash2, X } from 'lucide-react'
 import { useAsync } from '../../hooks/useAsync'
 import { useTitle } from '../../hooks/useTitle'
 import { useSettings } from '../../hooks/useSettings'
 import { getSettings, saveSettings } from '../../services/settings'
 import { availableQuestions } from '../../services/questions'
+import { listAudit } from '../../services/audit'
+import { fmtDateTime } from '../../utils/format'
 import { humanError } from '../../lib/errors'
 import PageHeader from '../../components/ui/PageHeader'
 import { Button, IconButton } from '../../components/ui/Button'
@@ -36,6 +38,7 @@ export default function Settings() {
     const [s, avail] = await Promise.all([getSettings(), availableQuestions()])
     return { s, avail }
   }, [])
+  const audit = useAsync(() => listAudit(60), [])
   const [f, setF] = useState<AppSettings | null>(null)
   const [busy, setBusy] = useState(false)
   const [newCat, setNewCat] = useState('')
@@ -83,6 +86,7 @@ export default function Settings() {
       await saveSettings(f)
       await refresh()
       await reload()
+      void audit.reload()
       toast.success('Настройки сохранены')
     } catch (err) {
       toast.error(humanError(err))
@@ -232,13 +236,34 @@ export default function Settings() {
             </Button>
           </div>
         </Section>
+
+        <Section icon={<History size={19} />} title="Журнал действий" text="Удаление результатов, изменения вопросов, сотрудников и настроек. Записи нельзя изменить или удалить из интерфейса.">
+          {audit.error ? (
+            <p className="text-[13.5px] text-ink-3">Журнал недоступен — примените миграцию 006 (см. docs/SETUP.md).</p>
+          ) : audit.data && audit.data.length ? (
+            <ul className="scrollbar-thin max-h-[420px] divide-y divide-line overflow-y-auto rounded-2xl border border-line">
+              {audit.data.map((r) => (
+                <li key={r.id} className="px-4 py-3 text-[13.5px]">
+                  <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
+                    <span className="font-semibold text-ink">{r.action}</span>
+                    <span className="text-[12px] text-ink-4">{fmtDateTime(r.at)}</span>
+                  </div>
+                  {r.details && <div className="mt-0.5 break-words text-ink-3">{r.details}</div>}
+                  <div className="mt-0.5 text-[12px] text-ink-4">{r.actor_name || 'система'}</div>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-[13.5px] text-ink-3">{audit.loading ? 'Загрузка…' : 'Записей пока нет.'}</p>
+          )}
+        </Section>
       </div>
 
       {/* sticky save bar */}
       <div
         className={cn(
-          'fixed inset-x-0 bottom-0 z-30 border-t border-line bg-white/90 backdrop-blur-xl transition-transform duration-300 lg:left-[272px]',
-          dirty ? 'translate-y-0' : 'translate-y-full',
+          'fixed inset-x-0 bottom-0 z-30 border-t border-line bg-white/90 backdrop-blur-xl transition-all duration-300 lg:left-[272px]',
+          dirty ? 'translate-y-0 opacity-100' : 'pointer-events-none translate-y-full opacity-0',
         )}
       >
         <div className="mx-auto flex max-w-[1280px] items-center justify-between gap-3 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 sm:px-6 lg:px-10">

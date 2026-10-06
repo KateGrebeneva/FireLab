@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { ChevronRight, ClipboardCheck, GraduationCap } from 'lucide-react'
+import { ChevronRight, ClipboardCheck, GraduationCap, Trash2 } from 'lucide-react'
 import type { Attempt } from '../types'
 import { fmtDateTime, typeLabel } from '../utils/format'
 import { Badge } from './ui/Badge'
@@ -42,7 +42,34 @@ export function PctBar({ pct, pass = 80 }: { pct: number; pass?: number }) {
   )
 }
 
-export default function AttemptsTable({ rows, base, showUser = false, pass = 80 }: { rows: Attempt[]; base: string; showUser?: boolean; pass?: number }) {
+function Check({ checked, onChange, label }: { checked: boolean; onChange: () => void; label: string }) {
+  return (
+    <input
+      type="checkbox"
+      aria-label={label}
+      checked={checked}
+      onChange={onChange}
+      onClick={(e) => e.stopPropagation()}
+      className="h-[18px] w-[18px] shrink-0 cursor-pointer rounded border-gray-300 accent-brand-600"
+    />
+  )
+}
+
+export interface AttemptsTableProps {
+  rows: Attempt[]
+  base: string
+  showUser?: boolean
+  pass?: number
+  /** выбор строк для массового удаления (только администратор) */
+  selected?: Set<string>
+  onToggle?: (id: string) => void
+  onToggleAll?: (ids: string[], on: boolean) => void
+  onDelete?: (a: Attempt) => void
+}
+
+export default function AttemptsTable({ rows, base, showUser = false, pass = 80, selected, onToggle, onToggleAll, onDelete }: AttemptsTableProps) {
+  const selectable = Boolean(selected && onToggle)
+  const allOn = selectable && rows.length > 0 && rows.every((r) => selected!.has(r.id))
   return (
     <>
       {/* desktop */}
@@ -50,6 +77,11 @@ export default function AttemptsTable({ rows, base, showUser = false, pass = 80 
         <table className="w-full text-sm">
           <thead>
             <tr className="table-head">
+              {selectable && (
+                <th className="w-10 py-3 pl-5">
+                  <Check checked={allOn} label="Выбрать все на странице" onChange={() => onToggleAll?.(rows.map((r) => r.id), !allOn)} />
+                </th>
+              )}
               {showUser && <th className="px-5 py-3">Сотрудник</th>}
               <th className="px-5 py-3">Дата</th>
               <th className="px-5 py-3">Тип</th>
@@ -61,7 +93,12 @@ export default function AttemptsTable({ rows, base, showUser = false, pass = 80 
           </thead>
           <tbody>
             {rows.map((a) => (
-              <tr key={a.id} className="table-row group">
+              <tr key={a.id} className={cn('table-row group', selected?.has(a.id) && 'bg-brand-50/50')}>
+                {selectable && (
+                  <td className="py-3.5 pl-5">
+                    <Check checked={selected!.has(a.id)} label="Выбрать" onChange={() => onToggle!(a.id)} />
+                  </td>
+                )}
                 {showUser && (
                   <td className="px-5 py-3.5">
                     <div className="flex items-center gap-2.5">
@@ -77,13 +114,23 @@ export default function AttemptsTable({ rows, base, showUser = false, pass = 80 
                 <td className="px-5 py-3.5">
                   <ResultBadge a={a} />
                 </td>
-                <td className="px-5 py-3.5 tabular-nums text-ink-2">
+                <td className="whitespace-nowrap px-5 py-3.5 tabular-nums text-ink-2">
                   {a.correct_answers} / {a.total_questions}
                 </td>
                 <td className="px-5 py-3.5">
                   <PctBar pct={a.percentage ?? 0} pass={pass} />
                 </td>
-                <td className="px-5 py-3.5 text-right">
+                <td className="whitespace-nowrap px-5 py-3.5 text-right">
+                  {onDelete && (
+                    <button
+                      onClick={() => onDelete(a)}
+                      className="mr-1 inline-grid h-8 w-8 place-items-center rounded-lg text-ink-4 opacity-60 transition hover:bg-brand-50 hover:text-brand-700 group-hover:opacity-100"
+                      aria-label="Удалить результат"
+                      title="Удалить результат"
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  )}
                   <Link to={`${base}/${a.id}`} className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-[13px] font-semibold text-brand-700 transition hover:bg-brand-50">
                     Разбор <ChevronRight size={15} className="transition-transform group-hover:translate-x-0.5" />
                   </Link>
@@ -97,8 +144,13 @@ export default function AttemptsTable({ rows, base, showUser = false, pass = 80 
       {/* mobile */}
       <ul className="divide-y divide-line md:hidden">
         {rows.map((a) => (
-          <li key={a.id}>
-            <Link to={`${base}/${a.id}`} className="flex items-center gap-3 px-4 py-3.5 active:bg-brand-50/50">
+          <li key={a.id} className={cn('flex items-center', selected?.has(a.id) && 'bg-brand-50/50')}>
+            {selectable && (
+              <span className="pl-4">
+                <Check checked={selected!.has(a.id)} label="Выбрать" onChange={() => onToggle!(a.id)} />
+              </span>
+            )}
+            <Link to={`${base}/${a.id}`} className="flex min-w-0 flex-1 items-center gap-3 px-4 py-3.5 active:bg-brand-50/50">
               <div className="min-w-0 flex-1">
                 {showUser && <div className="truncate text-[14px] font-semibold text-ink">{a.profiles?.full_name ?? 'Удалённый сотрудник'}</div>}
                 <div className="flex flex-wrap items-center gap-2 text-[13px] text-ink-3">
@@ -115,6 +167,11 @@ export default function AttemptsTable({ rows, base, showUser = false, pass = 80 
               </div>
               <ChevronRight size={16} className="text-ink-4" />
             </Link>
+            {onDelete && (
+              <button onClick={() => onDelete(a)} className="mr-2 grid h-9 w-9 shrink-0 place-items-center rounded-lg text-ink-4 active:bg-brand-50" aria-label="Удалить результат">
+                <Trash2 size={16} />
+              </button>
+            )}
           </li>
         ))}
       </ul>

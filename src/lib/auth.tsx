@@ -66,19 +66,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const signIn = async (login: string, password: string) => {
-    let email = login.trim()
-    if (!email || !password) return 'Введите логин и пароль'
-    if (!email.includes('@')) {
-      const { data, error } = await supabase.rpc('email_for_login', { p_login: email })
-      if (error) return /fetch/i.test(error.message) ? 'Нет соединения с сервером' : 'Неверный логин или пароль'
-      if (!data) return 'Неверный логин или пароль'
-      email = data as string
-    }
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
-    if (error) {
-      if (/banned/i.test(error.message)) return 'Учётная запись заблокирована администратором'
-      if (/fetch/i.test(error.message)) return 'Нет соединения с сервером'
-      return 'Неверный логин или пароль'
+    const value = login.trim()
+    if (!value || !password) return 'Введите логин и пароль'
+    const netErr = (m: string) => /fetch|network/i.test(m)
+
+    // 1) email — входим напрямую
+    // 2) логин сотрудника — служебный email вида login@firelab.local (ничего не раскрывает)
+    // 3) иначе — вход через серверную функцию: email ищется на сервере и посетителю не показывается
+    const direct = value.includes('@') ? value : `${value.toLowerCase()}@firelab.local`
+    const first = await supabase.auth.signInWithPassword({ email: direct, password })
+    if (first.error) {
+      if (netErr(first.error.message)) return 'Нет соединения с сервером'
+      if (/banned/i.test(first.error.message)) return 'Учётная запись заблокирована администратором'
+      if (value.includes('@')) return 'Неверный логин или пароль'
+      const { data, error } = await supabase.functions.invoke('admin-users', { body: { action: 'login', login: value, password } })
+      const tokens = data as { access_token?: string; refresh_token?: string; error?: string } | null
+      if (!tokens?.access_token || !tokens.refresh_token) {
+        if (tokens?.error && /заблок/i.test(tokens.error)) return tokens.error
+        if (error && netErr(error.message)) return 'Нет соединения с сервером'
+        return 'Неверный логин или пароль'
+      }
+      const set = await supabase.auth.setSession({ access_token: tokens.access_token, refresh_token: tokens.refresh_token })
+      if (set.error) return 'Не удалось войти. Попробуйте ещё раз.'
     }
     const p = await loadProfile()
     setProfile(p)

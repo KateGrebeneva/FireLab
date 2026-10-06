@@ -55,7 +55,7 @@ export default function Account() {
   const savePw = async (e: FormEvent) => {
     e.preventDefault()
     setPwErr('')
-    if (pw.next.length < 6) return setPwErr('Новый пароль — минимум 6 символов')
+    if (pw.next.length < 8) return setPwErr('Новый пароль — минимум 8 символов')
     if (pw.next !== pw.repeat) return setPwErr('Пароли не совпадают')
     if (pw.next === pw.current) return setPwErr('Новый пароль совпадает с текущим')
     setPwBusy(true)
@@ -150,7 +150,7 @@ export default function Account() {
             </span>
             <div>
               <h3 className="text-[16px] font-bold">Смена пароля</h3>
-              <p className="text-[12.5px] text-ink-3">Минимум 6 символов</p>
+              <p className="text-[12.5px] text-ink-3">Минимум 8 символов, лучше с цифрами и буквами разного регистра</p>
             </div>
           </div>
           <Input
