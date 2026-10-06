@@ -1,0 +1,63 @@
+/** @type {import('tailwindcss').Config} */
+export default {
+  content: ['./index.html', './src/**/*.{ts,tsx}'],
+  theme: {
+    container: { center: true, padding: { DEFAULT: '1rem', sm: '1.5rem', lg: '2rem' }, screens: { '2xl': '1240px' } },
+    extend: {
+      colors: {
+        brand: {
+          50: '#FEF3F4',
+          100: '#FDE4E7',
+          200: '#F9C6CC',
+          300: '#F29AA5',
+          400: '#E25A6B',
+          500: '#CC2A3F',
+          600: '#B3162B',
+          700: '#961124',
+          800: '#7A0F1F',
+          900: '#5E0C18',
+          DEFAULT: '#B3162B',
+          dark: '#8A0F20',
+          soft: '#FDF1F2',
+        },
+        ink: { DEFAULT: '#1D1F23', 2: '#3A3D44', 3: '#6B6F78', 4: '#9A9EA6' },
+        line: '#ECEBEC',
+        canvas: '#F7F6F6',
+      },
+      fontFamily: {
+        sans: ['"Inter Variable"', 'Inter', 'ui-sans-serif', 'system-ui', '-apple-system', 'Segoe UI', 'Roboto', 'sans-serif'],
+        display: ['"Manrope Variable"', 'Manrope', '"Inter Variable"', 'ui-sans-serif', 'system-ui', '-apple-system', 'Segoe UI', 'Roboto', 'sans-serif'],
+      },
+      boxShadow: {
+        card: '0 1px 2px rgba(29,31,35,.04), 0 8px 24px -6px rgba(60,20,28,.08)',
+        lift: '0 2px 4px rgba(29,31,35,.04), 0 24px 48px -12px rgba(90,20,35,.18)',
+        brand: '0 10px 24px -8px rgba(179,22,43,.55)',
+        inset: 'inset 0 0 0 1px rgba(29,31,35,.06)',
+      },
+      borderRadius: { '4xl': '2rem' },
+      keyframes: {
+        'fade-up': { from: { opacity: '0', transform: 'translateY(14px)' }, to: { opacity: '1', transform: 'none' } },
+        'fade-in': { from: { opacity: '0' }, to: { opacity: '1' } },
+        'scale-in': { from: { opacity: '0', transform: 'scale(.96) translateY(8px)' }, to: { opacity: '1', transform: 'none' } },
+        'slide-in': { from: { opacity: '0', transform: 'translateX(16px)' }, to: { opacity: '1', transform: 'none' } },
+        float: { '0%,100%': { transform: 'translateY(0)' }, '50%': { transform: 'translateY(-8px)' } },
+        shimmer: { from: { backgroundPosition: '-200% 0' }, to: { backgroundPosition: '200% 0' } },
+        draw: { from: { strokeDashoffset: 'var(--len, 1000)' }, to: { strokeDashoffset: '0' } },
+        grow: { from: { transform: 'scaleY(0)' }, to: { transform: 'scaleY(1)' } },
+        growx: { from: { transform: 'scaleX(0)' }, to: { transform: 'scaleX(1)' } },
+      },
+      animation: {
+        'fade-up': 'fade-up .5s cubic-bezier(.2,.7,.2,1) both',
+        'fade-in': 'fade-in .3s ease both',
+        'scale-in': 'scale-in .28s cubic-bezier(.2,.7,.2,1) both',
+        'slide-in': 'slide-in .35s cubic-bezier(.2,.7,.2,1) both',
+        float: 'float 6s ease-in-out infinite',
+        shimmer: 'shimmer 1.6s linear infinite',
+        draw: 'draw 1.4s cubic-bezier(.4,0,.2,1) both',
+        grow: 'grow .8s cubic-bezier(.2,.7,.2,1) both',
+        growx: 'growx .8s cubic-bezier(.2,.7,.2,1) both',
+      },
+    },
+  },
+  plugins: [],
+}
