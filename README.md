@@ -132,7 +132,7 @@ node docker/keys.mjs          # создаёт .env и генерирует се
 docker compose up -d --build  # → http://<IP-компьютера>:8080
 ```
 
-Пошаговая инструкция, обновление и резервные копии — **[docs/DOCKER.md](docs/DOCKER.md)**.
+Перенос данных из облака — `docker compose run --rm import`. Пошаговая инструкция, обновление и резервные копии — **[docs/DOCKER.md](docs/DOCKER.md)**.
 
 <br />
 

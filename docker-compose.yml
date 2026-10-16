@@ -4,6 +4,7 @@
 #   Запуск:                 docker compose up -d --build
 #   Остановка:              docker compose down          (данные сохраняются)
 #   Логи:                   docker compose logs -f
+#   Перенос из облака:      docker compose run --rm import   (CLOUD_DB_URL в .env)
 #
 # Подробная инструкция — docs/DOCKER.md
 
@@ -140,6 +141,22 @@ services:
     volumes:
       - ./docker/seed.mjs:/seed.mjs:ro
     command: ["node", "/seed.mjs"]
+
+  # Перенос данных из облачного Supabase (запускается вручную: docker compose run --rm import)
+  import:
+    image: supabase/postgres:17.6.1.136
+    profiles: ["tools"]
+    restart: "no"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      <<: *pg-env
+      CLOUD_DB_URL: ${CLOUD_DB_URL:-}
+      FORCE: ${FORCE:-no}
+    volumes:
+      - ./docker/db/import-cloud.sh:/import-cloud.sh:ro
+    entrypoint: ["sh", "/import-cloud.sh"]
 
   # Серверные функции (supabase/functions/admin-users): вход по логину, управление сотрудниками
   api:
