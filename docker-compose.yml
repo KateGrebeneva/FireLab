@@ -1,0 +1,186 @@
+# FireLab — полный стек в Docker: сайт + база + авторизация + API.
+#
+#   Подготовка (один раз):  node docker/keys.mjs   → затем впишите администратора в .env
+#   Запуск:                 docker compose up -d --build
+#   Остановка:              docker compose down          (данные сохраняются)
+#   Логи:                   docker compose logs -f
+#
+# Подробная инструкция — docs/DOCKER.md
+
+name: firelab
+
+x-pg-env: &pg-env
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Запустите node docker/keys.mjs}
+
+services:
+  # PostgreSQL со схемами и ролями Supabase
+  db:
+    image: supabase/postgres:17.6.1.136
+    restart: unless-stopped
+    volumes:
+      - ./docker/db/roles.sql:/docker-entrypoint-initdb.d/init-scripts/99-roles.sql:ro
+      - ./docker/db/jwt.sql:/docker-entrypoint-initdb.d/init-scripts/99-jwt.sql:ro
+      - db-data:/var/lib/postgresql/data
+      - db-config:/etc/postgresql-custom
+    environment:
+      <<: *pg-env
+      POSTGRES_HOST: /var/run/postgresql
+      PGPORT: 5432
+      POSTGRES_PORT: 5432
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      PGDATABASE: postgres
+      POSTGRES_DB: postgres
+      JWT_SECRET: ${JWT_SECRET:?Запустите node docker/keys.mjs}
+      JWT_EXP: ${JWT_EXPIRY:-3600}
+    command: ["postgres", "-c", "config_file=/etc/postgresql/postgresql.conf", "-c", "log_min_messages=fatal"]
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres", "-h", "localhost"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    # Доступ к базе с самого компьютера-сервера (DBeaver, pgAdmin) — раскомментируйте:
+    # ports:
+    #   - "127.0.0.1:5432:5432"
+
+  # Авторизация (Supabase Auth / GoTrue): вход, сессии, пароли
+  auth:
+    image: supabase/gotrue:v2.189.0
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      GOTRUE_API_HOST: 0.0.0.0
+      GOTRUE_API_PORT: 9999
+      API_EXTERNAL_URL: ${SITE_URL:-http://localhost:8080}
+      GOTRUE_DB_DRIVER: postgres
+      GOTRUE_DB_DATABASE_URL: postgres://supabase_auth_admin:${POSTGRES_PASSWORD}@db:5432/postgres
+      GOTRUE_SITE_URL: ${SITE_URL:-http://localhost:8080}
+      GOTRUE_URI_ALLOW_LIST: ""
+      # учётные записи создаёт только администратор
+      GOTRUE_DISABLE_SIGNUP: "true"
+      GOTRUE_JWT_ADMIN_ROLES: service_role
+      GOTRUE_JWT_AUD: authenticated
+      GOTRUE_JWT_DEFAULT_GROUP_NAME: authenticated
+      GOTRUE_JWT_EXP: ${JWT_EXPIRY:-3600}
+      GOTRUE_JWT_SECRET: ${JWT_SECRET}
+      GOTRUE_JWT_ISSUER: ${SITE_URL:-http://localhost:8080}
+      GOTRUE_EXTERNAL_EMAIL_ENABLED: "true"
+      GOTRUE_EXTERNAL_ANONYMOUS_USERS_ENABLED: "false"
+      GOTRUE_MAILER_AUTOCONFIRM: "true"
+      GOTRUE_EXTERNAL_PHONE_ENABLED: "false"
+      GOTRUE_SMS_AUTOCONFIRM: "false"
+      # входы всех сотрудников идут через сервер функций (один адрес) — запас по лимиту
+      GOTRUE_RATE_LIMIT_TOKEN_REFRESH: "1800"
+      GOTRUE_RATE_LIMIT_VERIFY: "1800"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9999/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  # REST API к базе (PostgREST) — права проверяются политиками RLS
+  rest:
+    image: postgrest/postgrest:v14.12
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGRST_DB_URI: postgres://authenticator:${POSTGRES_PASSWORD}@db:5432/postgres
+      PGRST_DB_SCHEMAS: public
+      PGRST_DB_EXTRA_SEARCH_PATH: public,extensions
+      PGRST_DB_MAX_ROWS: 1000
+      PGRST_DB_ANON_ROLE: anon
+      PGRST_JWT_SECRET: ${JWT_SECRET}
+      PGRST_DB_USE_LEGACY_GUCS: "false"
+      PGRST_APP_SETTINGS_JWT_SECRET: ${JWT_SECRET}
+      PGRST_APP_SETTINGS_JWT_EXP: ${JWT_EXPIRY:-3600}
+      PGRST_ADMIN_SERVER_PORT: 3001
+      PGRST_ADMIN_SERVER_HOST: localhost
+    command: ["postgrest"]
+    healthcheck:
+      test: ["CMD", "postgrest", "--ready"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  # Миграции supabase/migrations/*.sql (выполняется при каждом запуске, применяет только новые)
+  migrate:
+    image: supabase/postgres:17.6.1.136
+    restart: "no"
+    depends_on:
+      db:
+        condition: service_healthy
+      auth:
+        condition: service_healthy
+    environment:
+      <<: *pg-env
+    volumes:
+      - ./supabase/migrations:/migrations:ro
+      - ./docker/db/migrate.sh:/migrate.sh:ro
+    entrypoint: ["sh", "/migrate.sh"]
+
+  # Создание первого администратора из .env
+  setup:
+    image: node:22-alpine
+    restart: "no"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      rest:
+        condition: service_healthy
+    environment:
+      SERVICE_ROLE_KEY: ${SERVICE_ROLE_KEY:?Запустите node docker/keys.mjs}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      ADMIN_FULL_NAME: ${ADMIN_FULL_NAME:-}
+      ADMIN_RESET: ${ADMIN_RESET:-false}
+    volumes:
+      - ./docker/seed.mjs:/seed.mjs:ro
+    command: ["node", "/seed.mjs"]
+
+  # Серверные функции (supabase/functions/admin-users): вход по логину, управление сотрудниками
+  api:
+    image: node:22-alpine
+    restart: unless-stopped
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      SUPABASE_URL: http://web:8000
+      SUPABASE_SERVICE_ROLE_KEY: ${SERVICE_ROLE_KEY}
+      SUPABASE_ANON_KEY: ${ANON_KEY}
+      NODE_ENV: production
+    volumes:
+      - ./supabase/functions:/functions:ro
+      - ./docker/functions/server.mjs:/app/server.mjs:ro
+    command: ["node", "--experimental-strip-types", "--no-warnings", "/app/server.mjs"]
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:9000/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  # Сайт + шлюз API (nginx). Единственный сервис, открытый наружу.
+  web:
+    build:
+      context: .
+      args:
+        ANON_KEY: ${ANON_KEY:?Запустите node docker/keys.mjs}
+    image: firelab-web
+    restart: unless-stopped
+    depends_on:
+      auth:
+        condition: service_healthy
+      rest:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    ports:
+      - "${HTTP_PORT:-8080}:80"
+
+volumes:
+  db-data:
+  db-config:

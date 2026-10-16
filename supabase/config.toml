@@ -21,7 +21,9 @@ port = 54323
 [auth]
 enabled = true
 site_url = "http://localhost:5173"
-additional_redirect_urls = ["https://localhost:5173"]
+additional_redirect_urls = ["http://localhost:5173", "http://localhost:8080"]
+# учётные записи создаёт только администратор
+enable_signup = false
 
 [functions.admin-users]
 # JWT проверяется внутри функции (совместимо с новыми ключами подписи Supabase)

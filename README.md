@@ -100,7 +100,7 @@ FireLab — веб-приложение для подготовки и атте�
 | Данные и доступ | Supabase: PostgreSQL, Auth, Row Level Security |
 | Банк вопросов | 352 вопроса из «Тестов по проверке знания требований охраны труда» — см. [docs/QUESTIONS.md](docs/QUESTIONS.md) |
 | Серверная логика | PL/pgSQL-функции (выдача и проверка билетов, статистика), Edge Function `admin-users` |
-| Хостинг | Vercel или Cloudflare Pages (бесплатно) |
+| Хостинг | Vercel + Supabase (бесплатно) или свой сервер в Docker |
 
 <br />
 
@@ -123,6 +123,19 @@ cp .env.example .env.local      # Windows: Copy-Item .env.example .env.local
 
 <br />
 
+## Запуск в Docker (свой сервер)
+
+Весь стек — сайт, PostgreSQL, авторизация и API — поднимается одной командой на любом компьютере с Docker. Облако не нужно: данные хранятся на этом компьютере, сотрудники открывают сайт по его адресу в сети.
+
+```bash
+node docker/keys.mjs          # создаёт .env и генерирует секреты; впишите пароль администратора
+docker compose up -d --build  # → http://<IP-компьютера>:8080
+```
+
+Пошаговая инструкция, обновление и резервные копии — **[docs/DOCKER.md](docs/DOCKER.md)**.
+
+<br />
+
 ## Команды
 
 | Команда | Что делает |
@@ -133,6 +146,10 @@ cp .env.example .env.local      # Windows: Copy-Item .env.example .env.local
 | `npm run typecheck` | Проверка TypeScript |
 | `npm run check` | Typecheck + build |
 | `npm run seed` | Создание или восстановление администратора |
+| `npm run docker:keys` | Подготовка `.env` и секретов для Docker |
+| `npm run docker:up` | Сборка и запуск всего стека в Docker |
+| `npm run docker:down` | Остановка Docker-стека (данные сохраняются) |
+| `npm run docker:logs` | Логи всех сервисов |
 
 <br />
 
@@ -147,7 +164,7 @@ cp .env.example .env.local      # Windows: Copy-Item .env.example .env.local
 - **Нет внешних трекеров и CDN.** Шрифты подключаются локально, данные посетителей не уходят третьим лицам.
 
 > [!IMPORTANT]
-> Никогда не коммитьте `.env.local` (он уже в `.gitignore`). В Vercel добавляйте только `VITE_SUPABASE_URL` и `VITE_SUPABASE_ANON_KEY`.
+> Никогда не коммитьте `.env.local` и `.env` (они уже в `.gitignore`). В Vercel добавляйте только `VITE_SUPABASE_URL` и `VITE_SUPABASE_ANON_KEY`.
 
 <br />
 
@@ -166,8 +183,9 @@ src/
 supabase/
 ├── migrations/   схема, RLS, RPC-функции, банк вопросов
 └── functions/    Edge Function admin-users
+docker/           nginx, миграции, сервер функций, ключи — для docker-compose.yml
 scripts/          seed-admin.mjs
-docs/             SETUP.md, скриншоты
+docs/             SETUP.md, DOCKER.md, скриншоты
 ```
 
 <br />

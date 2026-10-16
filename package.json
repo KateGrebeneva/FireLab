@@ -16,7 +16,11 @@
     "supabase:link": "npx supabase link",
     "supabase:push": "npx supabase db push",
     "supabase:fn": "npx supabase functions deploy admin-users --no-verify-jwt",
-    "check": "tsc --noEmit && vite build"
+    "check": "tsc --noEmit && vite build",
+    "docker:keys": "node docker/keys.mjs",
+    "docker:up": "docker compose up -d --build",
+    "docker:down": "docker compose down",
+    "docker:logs": "docker compose logs -f --tail=100"
   },
   "dependencies": {
     "@fontsource-variable/inter": "^5.0.0",
